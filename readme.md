@@ -1,6 +1,6 @@
 # eleventy-plugin-solid
 
-<center>🏝️💖</center>
+<br><br><div align="center">🏝️💖</div><br><br>
 
 Adds [SolidJS](https://www.solidjs.com) support to
 [Eleventy](https://www.11ty.dev). Eleventy processes `11ty.solid.tsx` and
