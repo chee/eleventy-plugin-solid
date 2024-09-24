@@ -20,32 +20,32 @@ import solid from "eleventy-plugin-solid"
 
 export default eleventyConfig => {
 	eleventyConfig.addPlugin(solid, {
-        // default options shown
+		// default options shown
 
-        // the file extensions the plugin should register
-        extensions: ["11ty.solid.tsx", "11ty.solid.jsx"],
+		// the file extensions the plugin should register
+		extensions: ["11ty.solid.tsx", "11ty.solid.jsx"],
 
-        // extra modules to treat as external in the client-side component bundle
-        external: []
+		// extra modules to treat as external in the client-side component bundle
+		external: []
 
-        // extra config options for rollup-plugin-babel
-        babel: {}
+		// extra config options for rollup-plugin-babel
+		babel: {}
 
-        // if we should output solid's client side js to hydrate the component
-        // in the browser
-        hydrate: false
+		// if we should output solid's client side js to hydrate the component
+		// in the browser
+		hydrate: false
 
-        // (when hydrate: true) if the hydration output should be wrapped in a
-        // @11ty/is-land web component, with the hydration script in a
-        // data-island this requires you to set up @11ty/is-land as per the
-        // instructions at https://github.com/11ty/is-land
-        island: false
+		// (when hydrate: true) if the hydration output should be wrapped in a
+		// @11ty/is-land web component, with the hydration script in a
+		// data-island this requires you to set up @11ty/is-land as per the
+		// instructions at https://github.com/11ty/is-land
+		island: false
 
-        // the max time (in ms) to wait for suspense boundaries to resolve during SSR.
-        // you can set this to 0 to use the sync renderToString that resolves all its
-        // suspense boundaries on hydration
-        timeout: 30000
-    })
+		// the max time (in ms) to wait for suspense boundaries to resolve during
+		// SSR. you can set this to 0 to use the sync renderToString that resolves
+		// all its suspense boundaries on hydration
+		timeout: 30000
+	})
 }
 ```
 
