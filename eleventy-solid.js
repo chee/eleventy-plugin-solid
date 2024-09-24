@@ -4,11 +4,15 @@ import path from "node:path"
 import {globby} from "globby"
 import {createRequire, Module} from "node:module"
 import {rollup} from "rollup"
+import typescript from "@babel/preset-typescript"
+import env from "@babel/preset-env"
 /**
  * @typedef {Object} EleventySolidOptions
  * @prop {string[]} [extensions] extensions the template should treat as solid-js
  *                               (defaults to `[".11ty.solid.tsx", ".11ty.solid.jsx"]`)
  * @prop {boolean} [hydrate]
+ * @prop {string[]} [external]
+ * @prop {import("@rollup/plugin-babel").RollupBabelInputPluginOptions} [babel]
  */
 
 /**
@@ -39,11 +43,15 @@ export default class EleventySolid {
 	constructor({
 		extensions = ["11ty.solid.tsx", "11ty.solid.jsx"],
 		hydrate = false,
+		external = [],
+		babel,
 	} = {}) {
 		this.cwd = process.cwd()
 		this.components = {}
 		this.extensions = extensions
 		this.hydrate = hydrate
+		this.extraExternals = external
+		this.babel = babel
 	}
 
 	/**
@@ -100,21 +108,21 @@ export default class EleventySolid {
 							extensions: rollupExtensions,
 						}),
 						babel({
+							...this.babel,
 							presets: [
-								[
-									"babel-preset-solid",
-									{generate: "ssr", hydratable: true},
-								],
-								"@babel/preset-typescript",
-								[
-									"@babel/preset-env",
-									{bugfixes: true, targets: "last 1 year"},
-								],
+								...(this.babel?.presets ?? []),
+								typescript,
+								[env, {bugfixes: true, targets: "last 1 year"}],
+								["solid", {generate: "ssr", hydratable: this.hydrate}],
 							],
 							extensions: rollupExtensions,
 							babelHelpers: "bundled",
 						}),
 					],
+					// @solidjs/meta is not here because it is an esm module
+					// and i am not smart enough to figure out how to
+					// do the equivalent of createRequire for import
+					external: ["solid-js", "solid-js/web", "solid-js/store"],
 				}).then(build =>
 					build.generate({
 						format: "cjs",
@@ -125,6 +133,12 @@ export default class EleventySolid {
 		)
 	}
 
+	/**
+	 *
+	 * @param {string[]} inputs
+	 * @param {string} outdir
+	 * @returns
+	 */
 	async client(inputs, outdir) {
 		return Promise.all(
 			inputs.map(input =>
@@ -136,22 +150,23 @@ export default class EleventySolid {
 							extensions: rollupExtensions,
 						}),
 						babel({
+							...this.babel,
 							presets: [
-								[
-									"babel-preset-solid",
-									{generate: "dom", hydratable: true},
-								],
-								"@babel/preset-typescript",
-								[
-									"@babel/preset-env",
-									{bugfixes: true, targets: "last 1 year"},
-								],
+								...(this.babel?.presets ?? []),
+								["solid", {generate: "dom", hydratable: this.hydrate}],
+								typescript,
+								[env, {bugfixes: true, targets: "last 1 year"}],
 							],
 							extensions: rollupExtensions,
 							babelHelpers: "bundled",
 						}),
 					],
-					external: ["solid-js", "solid-js/web", "solid-js/store"],
+					external: [
+						"solid-js",
+						"solid-js/web",
+						"solid-js/store",
+						...this.extraExternals,
+					],
 				}).then(build =>
 					build.write({
 						dir: path.join(outdir, this.clientDir),
