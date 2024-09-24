@@ -1,6 +1,6 @@
 {
   "name": "eleventy-plugin-solid",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "description": "solid-js templates and islands for eleventy 💖🏝️",
   "main": ".eleventy.js",
