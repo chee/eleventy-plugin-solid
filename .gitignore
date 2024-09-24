@@ -1,0 +1,10 @@
+/media
+node_modules/
+/public
+.cache
+/.public
+/tmp/*
+/_site/
+/dist/
+# Local Netlify folder
+.netlify
