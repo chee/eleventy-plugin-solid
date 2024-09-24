@@ -197,7 +197,6 @@ export default class EleventySolid {
  *
  * @param {string} src
  * @param {string} filename
- * @returns
  */
 let require = createRequire(import.meta.url)
 function requireFromString(src, filename) {

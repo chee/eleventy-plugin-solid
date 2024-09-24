@@ -66,7 +66,6 @@ export default (
 	})
 
 	eleventy.addShortcode("solidAssets", function () {
-		console.log(this.page?.solid?.assets?.join?.("") ?? "")
 		return this.page?.solid?.assets?.join?.("") ?? ""
 	})
 
