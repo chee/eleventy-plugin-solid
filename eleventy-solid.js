@@ -2,7 +2,7 @@ import {nodeResolve as resolve} from "@rollup/plugin-node-resolve"
 import {babel} from "@rollup/plugin-babel"
 import path from "node:path"
 import {globby} from "globby"
-import {Module} from "node:module"
+import {createRequire, Module} from "node:module"
 import {rollup} from "rollup"
 /**
  * @typedef {Object} EleventySolidOptions
@@ -16,12 +16,14 @@ import {rollup} from "rollup"
  * @prop {import("solid-js").Component} server
  * @prop {string?} client
  * @prop {Record<any, any>?} data
+ * @prop {import("solid-js/web")} solid
  */
 
 /**
  * @typedef {Object} EleventySolidComponentModule
  * @prop {import("solid-js").Component} default
  * @prop {Record<any, any>?} data
+ * @prop {import("solid-js/web")} solid
  */
 
 export default class EleventySolid {
@@ -59,9 +61,15 @@ export default class EleventySolid {
 		for (let {output} of ssr) {
 			let [chunk] = output
 			let module = /** @type {EleventySolidComponentModule} */ (
-				requireFromString(chunk.code, chunk.facadeModuleId)
+				requireFromString(
+					// so i have access to the sharedConfig.context when rendering
+					chunk.code + `module.exports.solid = require("solid-js/web")`,
+					chunk.facadeModuleId
+				)
 			)
+
 			this.components[path.relative(this.cwd, chunk.facadeModuleId)] = {
+				solid: module.solid,
 				server: module.default,
 				client: this.hydrate
 					? path.join(outdir, this.clientDir, chunk.fileName)
@@ -170,19 +178,19 @@ export default class EleventySolid {
 	}
 }
 
-let module = new Module(import.meta.url)
 /**
  *
  * @param {string} src
  * @param {string} filename
  * @returns
  */
+let require = createRequire(import.meta.url)
 function requireFromString(src, filename) {
-	const m = new Module(filename, module)
-	m.paths = module.paths
+	let module = new Module(filename)
+	module.require = require
 	// @ts-expect-error
-	m._compile(src, filename)
-	return m.exports
+	module._compile(src, filename)
+	return module.exports
 }
 
 let rollupExtensions = ["js", "jsx", "ts", "tsx"]
