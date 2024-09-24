@@ -10,7 +10,7 @@ components that are optionally hydrated with
 
 ## usage
 
-compatible with eleventy 3+
+compatible with eleventy 3
 
 ### config
 
@@ -25,15 +25,26 @@ export default eleventyConfig => {
         // the file extensions the plugin should register
         extensions: ["11ty.solid.tsx", "11ty.solid.jsx"],
 
+        // extra modules to treat as external in the client-side component bundle
+        external: []
+
+        // extra config options for rollup-plugin-babel
+        babel: {}
+
         // if we should output solid's client side js to hydrate the component
         // in the browser
         hydrate: false
 
         // (when hydrate: true) if the hydration output should be wrapped in a
-        // @11ty/is-land web component, with the hydration script in a data-island
-        // this requires you to set up @11ty/is-land as per the instructions
-        // https://github.com/11ty/is-land
+        // @11ty/is-land web component, with the hydration script in a
+        // data-island this requires you to set up @11ty/is-land as per the
+        // instructions at https://github.com/11ty/is-land
         island: false
+
+        // the max time (in ms) to wait for suspense boundaries to resolve during SSR.
+        // you can set this to 0 to use the sync renderToString that resolves all its
+        // suspense boundaries on hydration
+        timeout: 30000
     })
 }
 ```
@@ -53,17 +64,14 @@ export const data = {
 		// when is-land is in use, you can set the `on:` attr here. see is-land
 		// docs for other valid values
 		on: "visible",
-		// the props passed on to the component when hydrating. this can be an object
-		// or a function that gets passed the eleventy data object
-		props(data) {
-			return {title: data.title}
+		// the component props. can be an object, or a function that returns
+		// an object. the function be called with your eleventy data
+		props({title}) {
+			return {title}
 		},
 	},
 }
 
-// during server-side rendering the component gets passed the _entire_ data
-// object as props like any other template. make sure you provide anything you
-// need in the serialized props function in the data.solid export!
 export default function Counter(props) {
 	const [count, update] = signal(0)
 	return (
@@ -79,6 +87,73 @@ export default function Counter(props) {
 }
 ```
 
+### hydration
+
+hydration takes a little setup. you'll need these two things
+
+- solid's hydrationScript
+- an [importmap](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap)
+
+#### solidHydrationScript shortcode
+
+somewhere in your layout add the `{% solidHydrationScript %}` shortcode. this
+outputs the same thing as solid's
+[generateHydrationScript](https://docs.solidjs.com/reference/rendering/hydration-script#hydrationscript)
+function and accepts the same arguments.
+
+it's best to do this in `<head>` so solid can start capturing events asap.
+
+#### importmap
+
+your
+[importmap](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap)
+will tell the browser how to acquire solid-js.
+
+you could use a service like [jspm](https://jspm.org/),
+[esm.sh](https://esm.sh/) etc or perhaps you'd prefer to self-host.
+
+##### e.g. esm.sh
+
+you can use esm.sh like this:
+
+```html
+<script type="importmap">
+	{
+		"solid-js": "https://esm.sh/solid-js@1.8.23",
+		"solid-js/store": "https://esm.sh/solid-js@1.8.23/store"
+		"solid-js/web": "https://esm.sh/solid-js@1.8.23/web"
+	}
+</script>
+```
+
+you'll be responsible for making sure the solid version is the same as the one
+you've installed to satisfy eleventy-plugin-solid's peer dependency! if it's
+different, you may see errors during hydration.
+
+##### e.g. self-hosted
+
+you can add an [eleventy passthrough copy](https://www.11ty.dev/docs/copy/) of
+the solid-js in your `node_modules` like this:
+
+```ts
+// in .eleventy.js
+eleventyConfig.addPassthroughCopy({
+	"node_modules/solid-js": "/solid-js",
+})
+```
+
+then your importmap might look like:
+
+```html
+<script type="importmap">
+	{
+		"solid-js": "/solid-js/dist/solid.js",
+		"solid-js/store": "/solid-js/store/dist/store.js"
+		"solid-js/web": "/solid-js/web/dist/web.js"
+	}
+</script>
+```
+
 ## thanks
 
 thanks to [eleventy-plugin-vue](https://github.com/11ty/eleventy-plugin-vue/)
@@ -88,6 +163,7 @@ for showing me the light
 ## todo
 
 - [ ] write tests
-- [ ] buy a lucy and yak jumpsuit
+- [x] buy a lucy and yak jumpsuit
 - [ ] return to mexico
 - [ ] eat tacos
+- [ ] document the getAssets thing
