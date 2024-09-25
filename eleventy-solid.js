@@ -82,7 +82,7 @@ export default class EleventySolid {
 				client: this.hydrate
 					? path.join(outdir, this.clientDir, chunk.fileName)
 					: null,
-				data: module.data,
+				data: module.data || {},
 			}
 		}
 	}
