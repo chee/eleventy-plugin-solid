@@ -24,30 +24,29 @@ import {generateHydrationScript} from "solid-js/web"
  */
 
 /**
- * @typedef {EleventySolidPluginGlobalOptions & {
- * props?: any | ((any) => any)
- * on?: string
- * }} EleventySolidSettings
+ * @typedef {Omit<EleventySolidPluginGlobalOptions & {
+ *    props?: any | ((any) => any)
+ *    on?: string
+ * }, "extensions">} EleventySolidSettings
  */
 
 /**
  * @param {import("@11ty/eleventy").UserConfig} eleventy
  * @param {EleventySolidPluginGlobalOptions} options
  * */
-export default (
-	eleventy,
-	{
+export default (eleventy, globalOptions = {}) => {
+	const {
 		extensions = ["11ty.solid.tsx", "11ty.solid.jsx"],
 		hydrate = false,
 		island = false,
 		timeout = 30000,
 		external,
 		babel,
-	} = {}
-) => {
-	let solid = new EleventySolid({extensions, hydrate, external, babel})
+	} = globalOptions
+	const solid = new EleventySolid({extensions})
+	eleventy.addGlobalData("solid", {external, hydrate, island, babel})
 	eleventy.on("beforeWatch", function (changedFiles) {
-		let changedSolidFiles = (changedFiles || []).filter(
+		const changedSolidFiles = (changedFiles || []).filter(
 			/**
 			 *
 			 * @param {string} filename
@@ -55,8 +54,22 @@ export default (
 			filename => extensions.some(ext => filename.endsWith(ext))
 		)
 		if (changedSolidFiles) {
-			// todo only build changed files
-			return solid.build(eleventy.dir.output)
+			for (const file of changedSolidFiles) {
+			}
+			solid.build({
+				...globalOptions,
+			})
+			return Promise.all(
+				changedSolidFiles.map(async inputPath => {
+					let data = await solid.data(inputPath, globalOptions, true)
+					return solid.build({
+						inputPath,
+						force: true,
+						...globalOptions,
+						...data?.solid,
+					})
+				})
+			)
 		}
 	})
 
@@ -75,7 +88,7 @@ export default (
 		getData: true,
 		cache: false,
 		async init() {
-			await solid.build(eleventy.dir.output)
+			solid.setOutputDir(eleventy.dir.output)
 		},
 		/**
 		 *
@@ -93,45 +106,63 @@ export default (
 		 */
 		compile(str, inputPath) {
 			return async data => {
+				const isLayout = !!data?.content
 				if (str) return typeof str === "function" ? str(data) : str
-				let componentSpec = solid.getComponent(path.normalize(inputPath))
 
-				let settings = /**@type {EleventySolidSettings} */ (
+				const componentSpec = solid.getComponent(path.normalize(inputPath))
+				const settings = /**@type {EleventySolidSettings} */ (
 					Object.assign({}, {hydrate, island, timeout}, data.solid)
 				)
 
-				let props =
+				const props =
 					typeof settings.props == "function"
-						? settings.props(data)
+						? settings.props.bind(componentSpec)(data)
 						: settings.props || {}
 
-				let timeoutMs = settings.timeout
-				let componentHTML =
+				const serverProps = isLayout ? {...data, ...props} : props
+
+				const timeoutMs = settings.timeout
+				const serverComponent = componentSpec.server.bind(
+					this.config.javascriptFunctions
+				)
+				const parsed = path.parse(inputPath)
+				const renderId = Math.random().toString(36).slice(4).replace(/\d+/, "")
+
+				const componentHTML =
 					typeof timeoutMs == "number" && timeoutMs > 0
 						? await componentSpec.solid.renderToStringAsync(
-								() => componentSpec.server(props),
-								{timeoutMs}
+								() => serverComponent(serverProps),
+								{timeoutMs, renderId: isLayout ? undefined : renderId}
 							)
-						: componentSpec.solid.renderToString(() =>
-								componentSpec.server(props)
+						: componentSpec.solid.renderToString(
+								() => serverComponent(serverProps),
+								{renderId: isLayout ? undefined : renderId}
 							)
 
-				let parsed = path.parse(inputPath)
+				// these two weird if statements make me think layouts should be
+				// a different function, and perhaps more of this function
+				// should be in the class
+				// anyway, exiting here early so a layout can include a doctype
+				// but it does mean layouts are harder to hydrate!
+				// you'd have to add the hydration yourself
+				// anyway layouts aren't even supported
+				if (isLayout) return componentHTML
+
 				if (data.page) {
 					data.page.solid ||= {}
 					data.page.solid.assets ||= []
 					data.page.solid.assets.push(componentSpec.solid.getAssets())
 				}
 
-				let solidJS = dedent/*html*/ `
+				const solidJS = dedent/*html*/ `
 					<script type="module">
-					    /*${props}*/
 						import component from "/solid/${parsed.name}.js"
 						import {hydrate} from "solid-js/web"
-						for (let el of document.querySelectorAll("solid-island[name='${parsed.name}']"))
+						for (const el of document.querySelectorAll("solid-island[name='${parsed.name}']"))
 							hydrate(
 								() => component(${JSON.stringify(props)}),
-								el
+								el,
+								{renderId: "${renderId}"}
 							)
 					</script>
 				`
@@ -148,7 +179,7 @@ export default (
 						solidJS
 					)
 				}
-				return /*html*/ `<solid-island name="${parsed.name}">${componentHTML}</solid-island>`
+				return componentHTML
 			}
 		},
 	})
