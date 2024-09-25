@@ -1,6 +1,5 @@
 import EleventySolid from "./eleventy-solid.js"
 import path from "node:path"
-import dedent from "dedent"
 import {generateHydrationScript} from "solid-js/web"
 
 /**
@@ -121,24 +120,12 @@ export default (eleventy, opts = {}) => {
 				}
 
 				// todo output this only once per template
-				let solidJS = dedent/*html*/ `
-					<script type="module" defer async>					    
-						import component from "/solid/${parsed.name}.js"
-						import {hydrate} from "solid-js/web"
-						for (let el of document.querySelectorAll("solid-island[island='${parsed.name}']")) {
-							hydrate(
-								() => component(${JSON.stringify(props)}),
-								el
-							)
-							el.setAttribute("hydrated", "")
-						}
-					</script>
-				`
+				let solidJS = /*html*/ `<script type="module" defer async>import component from "/solid/${parsed.name}.js";import {hydrate} from "solid-js/web";for (let el of document.querySelectorAll("solid-island[island='${parsed.name}']")){hydrate(() => component(${JSON.stringify(props)}), el);el.setAttribute("hydrated", "")}</script>`
 
 				if (globalOptions.hydrate) {
 					return (
 						/*html*/ `<solid-island island="${parsed.name}">${componentHTML}</solid-island>` +
-						`<!--hydrate:${parsed.name}-->${solidJS}<!--/hydrate:${parsed.name}-->`
+						`<!--${parsed.name}-->${solidJS}<!--/${parsed.name}-->`
 					)
 				}
 				return componentHTML
