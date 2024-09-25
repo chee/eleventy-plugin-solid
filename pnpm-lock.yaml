@@ -34,8 +34,11 @@ importers:
         version: 4.22.4
     devDependencies:
       '@11ty/eleventy':
-        specifier: 3.0.0-beta.1
+        specifier: ^3.0.0-beta.1
         version: 3.0.0-beta.1
+      prettier:
+        specifier: ^3.3.3
+        version: 3.3.3
       solid-js:
         specifier: ^1.8.23
         version: 1.8.23
@@ -1557,6 +1560,11 @@ packages:
   posthtml@0.16.6:
     resolution: {integrity: sha512-JcEmHlyLK/o0uGAlj65vgg+7LIms0xKXe60lcDOTU7oVX/3LuEuLwrQpW3VJ7de5TaFKiW4kWkaIpJL42FEgxQ==}
     engines: {node: '>=12.0.0'}
+
+  prettier@3.3.3:
+    resolution: {integrity: sha512-i2tDNA0O5IrMO757lfrdQZCc2jPNDVntV0m/+4whiDfWaTKfMNgR7Qz0NAeGz/nRqF4m5/6CLzbP4/liHt12Ew==}
+    engines: {node: '>=14'}
+    hasBin: true
 
   promise@7.3.1:
     resolution: {integrity: sha512-nolQXZ/4L+bP/UGlkfaIujX9BKxGwmQ9OT4mOt5yvy8iK1h3wqTEJCijzGANTCCl9nWjY41juyAn2K3Q1hLLTg==}
@@ -3477,6 +3485,8 @@ snapshots:
     dependencies:
       posthtml-parser: 0.11.0
       posthtml-render: 3.0.0
+
+  prettier@3.3.3: {}
 
   promise@7.3.1:
     dependencies:
