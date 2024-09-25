@@ -100,20 +100,22 @@ export default (
 					Object.assign({}, {hydrate, island, timeout}, data.solid)
 				)
 
+				let thisContext = this.config.javascriptFunctions
+
 				let props =
 					typeof settings.props == "function"
-						? settings.props(data)
+						? settings.props.bind(thisContext)(data)
 						: settings.props || {}
 
 				let timeoutMs = settings.timeout
 				let componentHTML =
 					typeof timeoutMs == "number" && timeoutMs > 0
 						? await componentSpec.solid.renderToStringAsync(
-								() => componentSpec.server(props),
+								() => componentSpec.server.bind(thisContext)(props),
 								{timeoutMs}
 							)
 						: componentSpec.solid.renderToString(() =>
-								componentSpec.server(props)
+								componentSpec.server.bind(thisContext)(props)
 							)
 
 				let parsed = path.parse(inputPath)
