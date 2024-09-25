@@ -5,8 +5,7 @@
 Adds [SolidJS](https://www.solidjs.com) support to
 [Eleventy](https://www.11ty.dev). Eleventy processes `11ty.solid.tsx` and
 `11ty.solid.jsx` as Eleventy templates and outputs server-side rendered
-components that are optionally hydrated with
-[`<is-land>`](https://github.com/11ty/is-land) on the client side!
+components that are (optionally) hydrated.
 
 ## usage
 
@@ -36,13 +35,6 @@ export default eleventyConfig => {
 		// (experimental / unstable)
 		hydrate: false
 
-		// (when hydrate: true) if the hydration output should be wrapped in a
-		// @11ty/is-land web component, with the hydration script in a
-		// data-island this requires you to set up @11ty/is-land as per the
-		// instructions at https://github.com/11ty/is-land
-		// (experimental / unstable)
-		island: false
-
 		// the max time (in ms) to wait for suspense boundaries to resolve during
 		// SSR. you can set this to 0 to use the sync renderToString that resolves
 		// all its suspense boundaries on hydration
@@ -54,25 +46,22 @@ export default eleventyConfig => {
 ### templates
 
 ```jsx
-import {createSignal as signal} from "solid-js"
-
 export const data = {
 	title: "my post title",
-	solid: {
-		// when is-land is in use, you can set the `on:` attr here. see is-land
-		// docs for other valid values
-		on: "visible",
-		// how to derive the component's props. may be an object, or a function
-		// that returns an object. the function from is called with your eleventy
-		// data during build
-		props({title}) {
-			return {title}
-		},
-	},
 }
 
+// how to derive the component's props. may be an object, or a function
+// that returns an object. the function from is called with your eleventy
+// data during build. `this` is eleventy.config.javascriptFunctions
+// [aliased as createProps]
+export function props(data) {
+	return {title: data.title}
+}
+
+import {createSignal} from "solid-js"
+
 export default function Counter(props) {
-	const [count, update] = signal(0)
+	const [count, update] = createSignal(0)
 	return (
 		<article>
 			<h1 style={{background: "lime"}}>{props.title}</h1>
@@ -157,8 +146,8 @@ then your importmap might look like:
 
 - layouts are unsupported
 - as the components are all rendered up front (so we can get the data export
-  early), it's not possible to selectively decide if a specific file should have
-  hydration
+  early), it's not possible to selectively decide if a specific template should
+  be hydrated
 
 ## thanks
 

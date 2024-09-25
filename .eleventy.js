@@ -9,18 +9,16 @@ import {generateHydrationScript} from "solid-js/web"
 
 /**
  * @typedef {Object} EleventySolidPluginGlobalOptions
- * @prop {string[]} [extensions] extensions the template should treat as
+ * @prop {string[]} extensions extensions the template should treat as
  *                               solid-js (defaults to `["11ty.solid.tsx",
  *                               "11ty.solid.jsx"]`)
- * @prop {string[]} [external] extra modules to treat as external in the client-side bundle
- * @prop {boolean} [hydrate] if we should output client side js to hydrate
+ * @prop {string[]} external extra modules to treat as external in the client-side bundle
+ * @prop {boolean} hydrate if we should output client side js to hydrate
  *                           (default `false`)
- * @prop {boolean} [island] if we should output in `@11ty/is-land`. only valid
- *                          when hydrate is true (default `false`)
- * @prop {number} [timeout] the max time (in ms) to wait for suspense
+ * @prop {number} timeout the max time (in ms) to wait for suspense
  *                          boundaries to resolve during SSR. Set to 0 to use
  *                          sync renderToString (default `30000`)
- *  @prop {BabelOptions} [babel] extra options to pass to the babel rollup plugin
+ *  @prop {BabelOptions} babel extra options to pass to the babel rollup plugin
  */
 
 /**
@@ -32,27 +30,28 @@ import {generateHydrationScript} from "solid-js/web"
 
 /**
  * @param {import("@11ty/eleventy").UserConfig} eleventy
- * @param {EleventySolidPluginGlobalOptions} options
+ * @param {Partial<EleventySolidPluginGlobalOptions>} opts
  * */
-export default (
-	eleventy,
-	{
-		extensions = ["11ty.solid.tsx", "11ty.solid.jsx"],
-		hydrate = false,
-		island = false,
-		timeout = 30000,
-		external,
-		babel,
-	} = {}
-) => {
-	let solid = new EleventySolid({extensions, hydrate, external, babel})
-	eleventy.on("beforeWatch", function (changedFiles) {
+export default (eleventy, opts = {}) => {
+	/** @type {EleventySolidPluginGlobalOptions} */
+	let globalOptions = Object.assign(
+		{
+			extensions: ["11ty.solid.tsx", "11ty.solid.jsx"],
+			hydrate: false,
+			timeout: 30000,
+			external: [],
+			babel: {},
+		},
+		opts
+	)
+	let solid = new EleventySolid(globalOptions)
+	eleventy.on("beforeWatch", async function (changedFiles) {
 		let changedSolidFiles = (changedFiles || []).filter(
 			/**
 			 *
 			 * @param {string} filename
 			 */
-			filename => extensions.some(ext => filename.endsWith(ext))
+			filename => globalOptions.extensions.some(ext => filename.endsWith(ext))
 		)
 		if (changedSolidFiles) {
 			// todo only build changed files
@@ -69,8 +68,8 @@ export default (
 		return this.page?.solid?.assets?.join?.("") ?? ""
 	})
 
-	eleventy.addTemplateFormats(extensions)
-	eleventy.addExtension(extensions, {
+	eleventy.addTemplateFormats(globalOptions.extensions)
+	eleventy.addExtension(globalOptions.extensions, {
 		read: false,
 		getData: true,
 		cache: false,
@@ -96,18 +95,14 @@ export default (
 				if (str) return typeof str === "function" ? str(data) : str
 				let componentSpec = solid.getComponent(path.normalize(inputPath))
 
-				let settings = /**@type {EleventySolidSettings} */ (
-					Object.assign({}, {hydrate, island, timeout}, data.solid)
-				)
-
 				let thisContext = this.config.javascriptFunctions
 
 				let props =
-					typeof settings.props == "function"
-						? settings.props.bind(thisContext)(data)
-						: settings.props || {}
+					typeof componentSpec.props == "function"
+						? componentSpec.props.bind(thisContext)(data)
+						: componentSpec.props || {}
 
-				let timeoutMs = settings.timeout
+				let timeoutMs = globalOptions.timeout
 				let componentHTML =
 					typeof timeoutMs == "number" && timeoutMs > 0
 						? await componentSpec.solid.renderToStringAsync(
@@ -127,27 +122,22 @@ export default (
 
 				// todo output this only once per template
 				let solidJS = dedent/*html*/ `
-					<script type="module">
-					    /*${props}*/
+					<script type="module" defer async>					    
 						import component from "/solid/${parsed.name}.js"
 						import {hydrate} from "solid-js/web"
-						for (let el of document.querySelectorAll("solid-island[name='${parsed.name}']"))
+						for (let el of document.querySelectorAll("solid-island[island='${parsed.name}']")) {
 							hydrate(
 								() => component(${JSON.stringify(props)}),
 								el
 							)
+							el.setAttribute("hydrated", "")
+						}
 					</script>
 				`
 
-				if (settings.hydrate && settings.island) {
-					return dedent/*html*/ `
-						<is-land ${settings.on ? `on:${settings.on}` : ""}>
-							<solid-island name="${parsed.name}">${componentHTML}</solid-island>
-							<template data-island>${solidJS}</template>
-						</is-land>`
-				} else if (settings.hydrate) {
+				if (globalOptions.hydrate) {
 					return (
-						/*html*/ `<solid-island name="${parsed.name}">${componentHTML}</solid-island>` +
+						/*html*/ `<solid-island island="${parsed.name}">${componentHTML}</solid-island>` +
 						`<!--hydrate:${parsed.name}-->${solidJS}<!--/hydrate:${parsed.name}-->`
 					)
 				}

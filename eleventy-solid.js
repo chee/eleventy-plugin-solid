@@ -18,16 +18,19 @@ import env from "@babel/preset-env"
 /**
  * @typedef {Object} ComponentSpec
  * @prop {import("solid-js").Component} server
- * @prop {string?} client
- * @prop {Record<any, any>?} data
+ * @prop {string} [client]
+ * @prop {Record<any, any>} [data]
  * @prop {import("solid-js/web")} solid
+ * @prop {(data: any) => Record<any, any>?} [props]
  */
 
 /**
  * @typedef {Object} EleventySolidComponentModule
  * @prop {import("solid-js").Component} default
- * @prop {Record<any, any>?} data
+ * @prop {Record<any, any>} [data]
  * @prop {import("solid-js/web")} solid
+ * @prop {(data: any) => Record<any, any>?} [props]
+ * @prop {(data: any) => Record<any, any>?} [createProps]
  */
 
 export default class EleventySolid {
@@ -76,13 +79,14 @@ export default class EleventySolid {
 				)
 			)
 
-			this.components[path.relative(this.cwd, chunk.facadeModuleId)] = {
+			this.components[path.relative(this.cwd, chunk.facadeModuleId ?? "")] = {
 				solid: module.solid,
 				server: module.default,
 				client: this.hydrate
 					? path.join(outdir, this.clientDir, chunk.fileName)
-					: null,
+					: undefined,
 				data: module.data || {},
+				props: module.props || module.createProps || module.data?.solid?.props,
 			}
 		}
 	}
@@ -119,9 +123,6 @@ export default class EleventySolid {
 							babelHelpers: "bundled",
 						}),
 					],
-					// @solidjs/meta is not here because it is an esm module
-					// and i am not smart enough to figure out how to
-					// do the equivalent of createRequire for import
 					external: ["solid-js", "solid-js/web", "solid-js/store"],
 				}).then(build =>
 					build.generate({
