@@ -33,12 +33,14 @@ export default eleventyConfig => {
 
 		// if we should output solid's client side js to hydrate the component
 		// in the browser
+		// (experimental / unstable)
 		hydrate: false
 
 		// (when hydrate: true) if the hydration output should be wrapped in a
 		// @11ty/is-land web component, with the hydration script in a
 		// data-island this requires you to set up @11ty/is-land as per the
 		// instructions at https://github.com/11ty/is-land
+		// (experimental / unstable)
 		island: false
 
 		// the max time (in ms) to wait for suspense boundaries to resolve during
@@ -84,7 +86,7 @@ export default function Counter(props) {
 }
 ```
 
-### hydration
+### hydration (experimental / unstable)
 
 hydration takes a little setup. you'll need these two things
 
@@ -151,6 +153,13 @@ then your importmap might look like:
 </script>
 ```
 
+## weaknesses
+
+- layouts are unsupported
+- as the components are all rendered up front (so we can get the data export
+  early), it's not possible to selectively decide if a specific file should have
+  hydration
+
 ## thanks
 
 thanks to [eleventy-plugin-vue](https://github.com/11ty/eleventy-plugin-vue/)
@@ -163,4 +172,3 @@ for showing me the light
 - [x] buy a lucy and yak jumpsuit
 - [ ] return to mexico
 - [ ] eat tacos
-- [ ] document the getAssets thing
