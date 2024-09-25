@@ -148,7 +148,7 @@ export default (
 						solidJS
 					)
 				}
-				return /*html*/ `<solid-island name="${parsed.name}">${componentHTML}</solid-island>`
+				return componentHTML
 			}
 		},
 	})
