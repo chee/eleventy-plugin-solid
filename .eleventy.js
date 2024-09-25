@@ -125,6 +125,7 @@ export default (
 					data.page.solid.assets.push(componentSpec.solid.getAssets())
 				}
 
+				// todo output this only once per template
 				let solidJS = dedent/*html*/ `
 					<script type="module">
 					    /*${props}*/
@@ -147,7 +148,7 @@ export default (
 				} else if (settings.hydrate) {
 					return (
 						/*html*/ `<solid-island name="${parsed.name}">${componentHTML}</solid-island>` +
-						solidJS
+						`<!--hydrate:${parsed.name}-->${solidJS}<!--/hydrate:${parsed.name}-->`
 					)
 				}
 				return componentHTML
