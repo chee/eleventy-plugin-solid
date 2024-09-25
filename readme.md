@@ -57,15 +57,12 @@ import {createSignal as signal} from "solid-js"
 export const data = {
 	title: "my post title",
 	solid: {
-		// the global `island` and `hydrate` settings can be overridden on a
-		// template-by-template basis
-		hydrate: true,
-		island: true,
 		// when is-land is in use, you can set the `on:` attr here. see is-land
 		// docs for other valid values
 		on: "visible",
-		// the component props. can be an object, or a function that returns
-		// an object. the function be called with your eleventy data
+		// how to derive the component's props. may be an object, or a function
+		// that returns an object. the function from is called with your eleventy
+		// data during build
 		props({title}) {
 			return {title}
 		},
