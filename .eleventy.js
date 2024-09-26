@@ -123,25 +123,32 @@ export default (eleventy, opts = {}) => {
 					data.page.solid.assets.push(componentSpec.solid.getAssets())
 				}
 
-				let solidJS =
-					/* prettier-ignore */
-					`<script type="module" defer async>` +
-						`import {hydrate} from "solid-js/web";` +
-						`import component from "/solid/${parsed.name}.js";` +
-						`for (let el of document.querySelectorAll("solid-island[island='${parsed.name}']"))  {` +
-							`hydrate(() => component(${JSON.stringify(props)}), el)` +
-							`el.setAttribute("hydrated", "")` +
-						`}` +
-					`</script>`
-
 				if (globalOptions.hydrate) {
 					return (
 						/*html*/ `<solid-island island="${parsed.name}">${html}</solid-island>` +
-						solidJS
+						createClientScript(parsed.name, props)
 					)
 				}
 				return html
 			}
 		},
 	})
+}
+
+/**
+ *
+ * @param {string} name
+ * @param {any} props
+ * @returns
+ */
+function createClientScript(name, props) {
+	return (
+		`<script type="module">` +
+		`import{hydrate as h}from"solid-js/web";` +
+		`import e from"/solid/a-typescript-page.11ty.js";` +
+		`for(let o of document.querySelectorAll("solid-island[island='${
+			name
+		}']"))h((()=>e(${JSON.stringify(props)})),o),o.setAttribute("hydrated","")` +
+		"</script>"
+	)
 }
