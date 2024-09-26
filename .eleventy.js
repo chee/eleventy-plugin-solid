@@ -52,8 +52,10 @@ export default (eleventy, opts = {}) => {
 			 */
 			filename => globalOptions.extensions.some(ext => filename.endsWith(ext))
 		)
+
 		if (changedSolidFiles) {
 			// todo only build changed files
+			// @ts-expect-error incorrect types for eleventy.dir
 			return solid.build(eleventy.dir.output)
 		}
 	})
@@ -73,6 +75,7 @@ export default (eleventy, opts = {}) => {
 		getData: true,
 		cache: false,
 		async init() {
+			// @ts-expect-error incorrect types for eleventy.dir
 			await solid.build(eleventy.dir.output)
 		},
 		/**
@@ -123,8 +126,8 @@ export default (eleventy, opts = {}) => {
 				let solidJS =
 					/* prettier-ignore */
 					`<script type="module" defer async>` +
-						`import component from "/solid/${parsed.name}.js"` +
-						`import {hydrate} from "solid-js/web"` +
+						`import {hydrate} from "solid-js/web";` +
+						`import component from "/solid/${parsed.name}.js;"` +
 						`for (let el of document.querySelectorAll("solid-island[island='${parsed.name}']"))  {` +
 							`hydrate(() => component(${JSON.stringify(props)}), el)` +
 							`el.setAttribute("hydrated", "")` +
