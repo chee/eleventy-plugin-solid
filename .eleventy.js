@@ -127,7 +127,7 @@ export default (eleventy, opts = {}) => {
 					/* prettier-ignore */
 					`<script type="module" defer async>` +
 						`import {hydrate} from "solid-js/web";` +
-						`import component from "/solid/${parsed.name}.js;"` +
+						`import component from "/solid/${parsed.name}.js";` +
 						`for (let el of document.querySelectorAll("solid-island[island='${parsed.name}']"))  {` +
 							`hydrate(() => component(${JSON.stringify(props)}), el)` +
 							`el.setAttribute("hydrated", "")` +
