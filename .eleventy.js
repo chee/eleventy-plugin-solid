@@ -102,15 +102,16 @@ export default (eleventy, opts = {}) => {
 						: componentSpec.props || {}
 
 				let timeoutMs = globalOptions.timeout
-				let componentHTML =
+
+				let render =
 					typeof timeoutMs == "number" && timeoutMs > 0
-						? await componentSpec.solid.renderToStringAsync(
-								() => componentSpec.server.bind(thisContext)(props),
-								{timeoutMs}
-							)
-						: componentSpec.solid.renderToString(() =>
-								componentSpec.server.bind(thisContext)(props)
-							)
+						? componentSpec.solid.renderToStringAsync
+						: componentSpec.solid.renderToString
+
+				let html = await render(
+					() => componentSpec.server.bind(thisContext)(props),
+					timeoutMs ? {timeoutMs} : {}
+				)
 
 				let parsed = path.parse(inputPath)
 				if (data.page) {
@@ -119,16 +120,24 @@ export default (eleventy, opts = {}) => {
 					data.page.solid.assets.push(componentSpec.solid.getAssets())
 				}
 
-				// todo output this only once per template
-				let solidJS = /*html*/ `<script type="module" defer async>import component from "/solid/${parsed.name}.js";import {hydrate} from "solid-js/web";for (let el of document.querySelectorAll("solid-island[island='${parsed.name}']")){hydrate(() => component(${JSON.stringify(props)}), el);el.setAttribute("hydrated", "")}</script>`
+				let solidJS =
+					/* prettier-ignore */
+					`<script type="module" defer async>` +
+						`import component from "/solid/${parsed.name}.js"` +
+						`import {hydrate} from "solid-js/web"` +
+						`for (let el of document.querySelectorAll("solid-island[island='${parsed.name}']"))  {` +
+							`hydrate(() => component(${JSON.stringify(props)}), el)` +
+							`el.setAttribute("hydrated", "")` +
+						`}` +
+					`</script>`
 
 				if (globalOptions.hydrate) {
 					return (
-						/*html*/ `<solid-island island="${parsed.name}">${componentHTML}</solid-island>` +
-						`<!--${parsed.name}-->${solidJS}<!--/${parsed.name}-->`
+						/*html*/ `<solid-island island="${parsed.name}">${html}</solid-island>` +
+						solidJS
 					)
 				}
-				return componentHTML
+				return html
 			}
 		},
 	})
