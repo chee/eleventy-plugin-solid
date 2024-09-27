@@ -165,3 +165,4 @@ for showing me the light
 - [x] buy a lucy and yak jumpsuit
 - [ ] return to mexico
 - [ ] eat tacos
+- [ ] use eleventy bundle for the client scripts when available
