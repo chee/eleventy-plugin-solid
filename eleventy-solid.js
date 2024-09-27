@@ -22,6 +22,7 @@ import env from "@babel/preset-env"
  * @prop {Record<any, any>} [data]
  * @prop {import("solid-js/web")} solid
  * @prop {(data: any) => Record<any, any>?} [props]
+ * @prop {string} renderId
  */
 
 /**
@@ -35,10 +36,13 @@ import env from "@babel/preset-env"
 
 export default class EleventySolid {
 	clientDir = "solid"
+
 	/**
 	 * @type {Record<string, ComponentSpec>}
 	 */
 	components = {}
+	getId = createIdGenerator()
+
 	/**
 	 *
 	 * @param {EleventySolidOptions} opts
@@ -87,6 +91,7 @@ export default class EleventySolid {
 					: undefined,
 				data: module.data || {},
 				props: module.props || module.createProps || module.data?.solid?.props,
+				renderId: this.getId(),
 			}
 		}
 	}
@@ -209,3 +214,35 @@ function requireFromString(src, filename) {
 }
 
 let rollupExtensions = ["js", "jsx", "ts", "tsx"]
+
+function createIdGenerator(
+	alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+) {
+	const alphabetLength = alphabet.length
+	let counter = 0
+
+	const incrementString = str => {
+		const lastChar = str[str.length - 1]
+		const restOfString = str.slice(0, -1)
+
+		if (lastChar === "z") {
+			return incrementString(restOfString) + "a"
+		} else {
+			const nextChar = alphabet[alphabet.indexOf(lastChar) + 1]
+			return restOfString + nextChar
+		}
+	}
+
+	return function getId() {
+		counter++
+		let id = ""
+		let remaining = counter - 1
+
+		while (remaining >= 0) {
+			id = alphabet[remaining % alphabetLength] + id
+			remaining = Math.floor(remaining / alphabetLength) - 1
+		}
+
+		return id
+	}
+}

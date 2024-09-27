@@ -9,14 +9,14 @@ import {generateHydrationScript} from "solid-js/web"
 /**
  * @typedef {Object} EleventySolidPluginGlobalOptions
  * @prop {string[]} extensions extensions the template should treat as
- *                               solid-js (defaults to `["11ty.solid.tsx",
- *                               "11ty.solid.jsx"]`)
+ *                             solid-js (defaults to `["11ty.solid.tsx",
+ *                             "11ty.solid.jsx"]`)
  * @prop {string[]} external extra modules to treat as external in the client-side bundle
  * @prop {boolean} hydrate if we should output client side js to hydrate
- *                           (default `false`)
+ *                         (default `false`)
  * @prop {number} timeout the max time (in ms) to wait for suspense
- *                          boundaries to resolve during SSR. Set to 0 to use
- *                          sync renderToString (default `30000`)
+ *                        boundaries to resolve during SSR. Set to 0 to use
+ *                        sync renderToString (default `30000`)
  *  @prop {BabelOptions} babel extra options to pass to the babel rollup plugin
  */
 
@@ -95,38 +95,40 @@ export default (eleventy, opts = {}) => {
 		compile(str, inputPath) {
 			return async data => {
 				if (str) return typeof str === "function" ? str(data) : str
-				let componentSpec = solid.getComponent(path.normalize(inputPath))
+				const componentSpec = solid.getComponent(path.normalize(inputPath))
 
-				let thisContext = this.config.javascriptFunctions
+				const thisContext = this.config.javascriptFunctions
 
-				let props =
+				const props =
 					typeof componentSpec.props == "function"
 						? componentSpec.props.bind(thisContext)(data)
 						: componentSpec.props || {}
 
-				let timeoutMs = globalOptions.timeout
+				const timeoutMs = globalOptions.timeout
+				const {renderId} = componentSpec
 
-				let render =
+				const render =
 					typeof timeoutMs == "number" && timeoutMs > 0
 						? componentSpec.solid.renderToStringAsync
 						: componentSpec.solid.renderToString
-
-				let html = await render(
+				const html = await render(
 					() => componentSpec.server.bind(thisContext)(props),
-					timeoutMs ? {timeoutMs} : {}
+					timeoutMs ? {timeoutMs, renderId} : {renderId}
 				)
 
-				let parsed = path.parse(inputPath)
 				if (data.page) {
 					data.page.solid ||= {}
 					data.page.solid.assets ||= []
 					data.page.solid.assets.push(componentSpec.solid.getAssets())
 				}
 
+				const {name} = path.parse(inputPath)
+
 				if (globalOptions.hydrate) {
 					return (
-						/*html*/ `<solid-island island="${parsed.name}">${html}</solid-island>` +
-						createClientScript(parsed.name, props)
+						/*html*/ `<solid-island island="${islandId(name, renderId)}">${
+							html
+						}</solid-island>` + createClientScript(name, props, renderId)
 					)
 				}
 				return html
@@ -138,17 +140,29 @@ export default (eleventy, opts = {}) => {
 /**
  *
  * @param {string} name
+ * @param {string} renderId
+ */
+function islandId(name, renderId) {
+	return `${name}#${renderId}`
+}
+
+/**
+ * @param {string} name
  * @param {any} props
+ * @param {string} renderId
  * @returns
  */
-function createClientScript(name, props) {
+function createClientScript(name, props, renderId) {
 	return (
 		`<script type="module">` +
 		`import{hydrate as h}from"solid-js/web";` +
-		`import e from"/solid/a-typescript-page.11ty.js";` +
-		`for(let o of document.querySelectorAll("solid-island[island='${
-			name
-		}']"))h((()=>e(${JSON.stringify(props)})),o),o.setAttribute("hydrated","")` +
+		`import e from"/solid/${name}.js";` +
+		`for(let o of document.querySelectorAll("solid-island[island='${islandId(
+			name,
+			renderId
+		)}']"))h((()=>e(${JSON.stringify(props)})),o,{renderId:${
+			renderId ? JSON.stringify(renderId) : "undefined"
+		}}),o.setAttribute("hydrated","")` +
 		"</script>"
 	)
 }
