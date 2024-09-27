@@ -65,25 +65,27 @@ export default class EleventySolid {
 	 * @param {string} outdir
 	 */
 	async build(outdir) {
-		let inputs = await globby(
+		const inputs = await globby(
 			this.extensions.map(ext => `**/*.${ext}`),
 			{
 				gitignore: true,
 			}
 		)
-		let ssr = await this.server(inputs)
+		const ssr = await this.server(inputs)
 		this.hydrate && (await this.client(inputs, outdir))
-		for (let {output} of ssr) {
-			let [chunk] = output
-			let module = /** @type {EleventySolidComponentModule} */ (
+		for (const {output} of ssr) {
+			const [chunk] = output
+			const module = /** @type {EleventySolidComponentModule} */ (
 				requireFromString(
 					// so i have access to the sharedConfig.context when rendering
 					chunk.code + `module.exports.solid = require("solid-js/web")`,
 					chunk.facadeModuleId
 				)
 			)
-
-			this.components[path.relative(this.cwd, chunk.facadeModuleId ?? "")] = {
+			const cachepoint = path.relative(this.cwd, chunk.facadeModuleId ?? "")
+			const prior = this.components[cachepoint]
+			const renderId = prior ? prior.renderId : this.getId()
+			this.components[cachepoint] = {
 				solid: module.solid,
 				server: module.default,
 				client: this.hydrate
@@ -91,7 +93,7 @@ export default class EleventySolid {
 					: undefined,
 				data: module.data || {},
 				props: module.props || module.createProps || module.data?.solid?.props,
-				renderId: this.getId(),
+				renderId,
 			}
 		}
 	}
@@ -204,16 +206,16 @@ export default class EleventySolid {
  * @param {string} src
  * @param {string} filename
  */
-let require = createRequire(import.meta.url)
+const require = createRequire(import.meta.url)
 function requireFromString(src, filename) {
-	let module = new Module(filename)
+	const module = new Module(filename)
 	module.require = require
 	// @ts-expect-error
 	module._compile(src, filename)
 	return module.exports
 }
 
-let rollupExtensions = ["js", "jsx", "ts", "tsx"]
+const rollupExtensions = ["js", "jsx", "ts", "tsx"]
 
 function createIdGenerator(
 	alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
