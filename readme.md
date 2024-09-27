@@ -149,6 +149,10 @@ then your importmap might look like:
   early), it's not possible to selectively decide if a specific template should
   be hydrated
 
+## bugs
+
+- during eleventy watch the data is outdated by 1 build. please fix this!
+
 ## thanks
 
 thanks to [eleventy-plugin-vue](https://github.com/11ty/eleventy-plugin-vue/)

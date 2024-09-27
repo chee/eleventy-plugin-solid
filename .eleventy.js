@@ -54,9 +54,9 @@ export default (eleventy, opts = {}) => {
 		)
 
 		if (changedSolidFiles) {
-			// todo only build changed files
+			// todo only rebuild changed files
 			// @ts-expect-error incorrect types for eleventy.dir
-			return solid.build(eleventy.dir.output)
+			return await solid.build(eleventy.dir.output)
 		}
 	})
 
