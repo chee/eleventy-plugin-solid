@@ -1,4 +1,4 @@
-import EleventySolid from "./eleventy-solid.js"
+import createEleventySolidContext from "./eleventy-solid.js"
 import path from "node:path"
 import {generateHydrationScript} from "solid-js/web"
 
@@ -33,7 +33,7 @@ import {generateHydrationScript} from "solid-js/web"
  * */
 export default (eleventy, opts = {}) => {
 	/** @type {EleventySolidPluginGlobalOptions} */
-	let globalOptions = Object.assign(
+	const globalOptions = Object.assign(
 		{
 			extensions: ["11ty.solid.tsx", "11ty.solid.jsx"],
 			hydrate: false,
@@ -43,22 +43,8 @@ export default (eleventy, opts = {}) => {
 		},
 		opts
 	)
-	let solid = new EleventySolid(globalOptions)
-	eleventy.on("beforeWatch", async function (changedFiles) {
-		let changedSolidFiles = (changedFiles || []).filter(
-			/**
-			 *
-			 * @param {string} filename
-			 */
-			filename => globalOptions.extensions.some(ext => filename.endsWith(ext))
-		)
 
-		if (changedSolidFiles) {
-			// todo only rebuild changed files
-			// @ts-expect-error incorrect types for eleventy.dir
-			return await solid.build(eleventy.dir.output)
-		}
-	})
+	const context = createEleventySolidContext()
 
 	eleventy.addShortcode("solidHydrationScript", function (options = {}) {
 		/** @ts-expect-error outdated types */
@@ -74,17 +60,17 @@ export default (eleventy, opts = {}) => {
 		read: false,
 		getData: true,
 		cache: false,
-		async init() {
-			// @ts-expect-error incorrect types for eleventy.dir
-			await solid.build(eleventy.dir.output)
-		},
+		// async init() {
+		// 	// @ts-expect-error incorrect types for eleventy.dir
+		// 	await solid.build(eleventy.dir.output)
+		// },
 		/**
 		 *
 		 * @param {string} inputPath
 		 * @returns
 		 */
 		getInstanceFromInputPath(inputPath) {
-			return solid.getComponent(path.normalize(inputPath))
+			return solid.getData(path.normalize(inputPath))
 		},
 		/**
 		 *
@@ -94,8 +80,13 @@ export default (eleventy, opts = {}) => {
 		 */
 		compile(str, inputPath) {
 			return async data => {
+				console.log("am i recompiling?")
 				if (str) return typeof str === "function" ? str(data) : str
-				const componentSpec = solid.getComponent(path.normalize(inputPath))
+				const componentSpec = await solid.build(
+					path.normalize(inputPath),
+					globalOptions,
+					eleventy.dir.output
+				)
 
 				const thisContext = this.config.javascriptFunctions
 

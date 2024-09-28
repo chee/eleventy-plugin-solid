@@ -1,18 +1,13 @@
 import {nodeResolve as resolve} from "@rollup/plugin-node-resolve"
 import {babel} from "@rollup/plugin-babel"
 import path from "node:path"
-import {globby} from "globby"
 import {createRequire, Module} from "node:module"
 import {rollup} from "rollup"
 import typescript from "@babel/preset-typescript"
 import env from "@babel/preset-env"
+
 /**
- * @typedef {Object} EleventySolidOptions
- * @prop {string[]} [extensions] extensions the template should treat as solid-js
- *                               (defaults to `[".11ty.solid.tsx", ".11ty.solid.jsx"]`)
- * @prop {boolean} [hydrate]
- * @prop {string[]} [external]
- * @prop {import("@rollup/plugin-babel").RollupBabelInputPluginOptions} [babel]
+ * @import {RollupBabelInputPluginOptions} from "@rollup/plugin-babel"
  */
 
 /**
@@ -28,176 +23,188 @@ import env from "@babel/preset-env"
 /**
  * @typedef {Object} EleventySolidComponentModule
  * @prop {import("solid-js").Component} default
- * @prop {Record<any, any>} [data]
  * @prop {import("solid-js/web")} solid
+ * @prop {Record<any, any>} [data]
  * @prop {(data: any) => Record<any, any>?} [props]
  * @prop {(data: any) => Record<any, any>?} [createProps]
  */
 
-export default class EleventySolid {
-	clientDir = "solid"
+/**
+ * @typedef {Object} EleventySolidContext
+ * @prop {Map<string, ComponentSpec>} cache
+ * @prop {string} clientDir
+ * @prop {() => string} getId
+ */
 
-	/**
-	 * @type {Record<string, ComponentSpec>}
-	 */
-	components = {}
-	getId = createIdGenerator()
+/**
+ * @typedef {Object} EleventySolidBuildOptions
+ * @prop {string} inputPath
+ * @prop {EleventySolidContext} context
+ * @prop {string} outdir
+ * @prop {boolean} [hydrate=false]
+ * @prop {boolean} [force=false]
+ */
 
-	/**
-	 *
-	 * @param {EleventySolidOptions} opts
-	 */
-	constructor({
-		extensions = ["11ty.solid.tsx", "11ty.solid.jsx"],
-		hydrate = false,
-		external = [],
-		babel,
-	} = {}) {
-		this.cwd = process.cwd()
-		this.components = {}
-		this.extensions = extensions
-		this.hydrate = hydrate
-		this.extraExternals = external
-		this.babel = babel
+export default function createEleventySolidContext() {
+	const clientDir = "solid"
+	const getId = createIdGenerator()
+	return {cache: new Map(), clientDir, getId}
+}
+
+/**
+ * @param {EleventySolidBuildOptions} options
+ */
+async function build(options) {
+	const cachepoint = path.relative(".", options.inputPath)
+	if (!options.force && this.cache.has(cachepoint)) {
+		return /** @type {ComponentSpec} */ (this.cache.get(cachepoint))
 	}
 
-	/**
-	 * @param {string} outdir
-	 */
-	async build(outdir) {
-		const inputs = await globby(
-			this.extensions.map(ext => `**/*.${ext}`),
-			{
-				gitignore: true,
-			}
+	const ssr = await this.server(options)
+	options.hydrate && (await this.client(options))
+
+	const [chunk] = ssr.output
+	const module = /** @type {EleventySolidComponentModule} */ (
+		requireFromString(
+			// so i have access to the sharedConfig.context when rendering
+			chunk.code + `module.exports.solid = require("solid-js/web")`,
+			chunk.facadeModuleId
 		)
-		const ssr = await this.server(inputs)
-		this.hydrate && (await this.client(inputs, outdir))
-		for (const {output} of ssr) {
-			const [chunk] = output
-			const module = /** @type {EleventySolidComponentModule} */ (
-				requireFromString(
-					// so i have access to the sharedConfig.context when rendering
-					chunk.code + `module.exports.solid = require("solid-js/web")`,
-					chunk.facadeModuleId
-				)
-			)
-			const cachepoint = path.relative(this.cwd, chunk.facadeModuleId ?? "")
-			const prior = this.components[cachepoint]
-			const renderId = prior ? prior.renderId : this.getId()
-			this.components[cachepoint] = {
-				solid: module.solid,
-				server: module.default,
-				client: this.hydrate
-					? path.join(outdir, this.clientDir, chunk.fileName)
-					: undefined,
-				data: module.data || {},
-				props: module.props || module.createProps || module.data?.solid?.props,
-				renderId,
-			}
-		}
+	)
+
+	const renderId = this.cache.has(cachepoint)
+		? /** @type {string} */ (this.cache.get(cachepoint)?.renderId)
+		: this.getId()
+
+	/** @type {ComponentSpec} */
+	const result = {
+		solid: module.solid,
+		server: module.default,
+		client: options.hydrate
+			? path.join(outdir, this.clientDir, chunk.fileName)
+			: undefined,
+		data: module.data || {},
+		props: module.props || module.createProps
+		renderId,
 	}
 
-	/**
-	 *
-	 * @param {string[]} inputs
-	 */
-	async server(inputs) {
-		return Promise.all(
-			inputs.map(input =>
-				rollup({
-					input,
-					plugins: [
-						resolve({
-							exportConditions: [
-								"solid",
-								"node",
-								"import",
-								"module",
-								"default",
-							],
-							extensions: rollupExtensions,
-						}),
-						babel({
-							...this.babel,
-							presets: [
-								...(this.babel?.presets ?? []),
-								typescript,
-								[env, {bugfixes: true, targets: "last 1 year"}],
-								["solid", {generate: "ssr", hydratable: this.hydrate}],
-							],
-							extensions: rollupExtensions,
-							babelHelpers: "bundled",
-						}),
-					],
-					external: ["solid-js", "solid-js/web", "solid-js/store"],
-				}).then(build =>
-					build.generate({
-						format: "cjs",
-						exports: "named",
-					})
-				)
-			)
+	if (!("save" in options) || options.save) {
+		this.cache.set(cachepoint, result)
+	}
+
+	return result
+}
+
+/**
+ * @param {string} input the input path
+ * @param {{hydrate?: boolean}} options
+ */
+async function importServer(input, options) {
+	const server = await buildServer(input, options)
+	const [chunk] = server.output
+	return /** @type {EleventySolidComponentModule} */ (
+		requireFromString(
+			// so i have access to the sharedConfig.context when rendering
+			chunk.code + `module.exports.solid = require("solid-js/web")`,
+			chunk.facadeModuleId
 		)
-	}
+	)
+}
 
-	/**
-	 *
-	 * @param {string[]} inputs
-	 * @param {string} outdir
-	 * @returns
-	 */
-	async client(inputs, outdir) {
-		return Promise.all(
-			inputs.map(input =>
-				rollup({
-					input,
-					plugins: [
-						resolve({
-							exportConditions: ["solid"],
-							extensions: rollupExtensions,
-						}),
-						babel({
-							...this.babel,
-							presets: [
-								...(this.babel?.presets ?? []),
-								["solid", {generate: "dom", hydratable: this.hydrate}],
-								typescript,
-								[env, {bugfixes: true, targets: "last 1 year"}],
-							],
-							extensions: rollupExtensions,
-							babelHelpers: "bundled",
-						}),
-					],
-					external: [
-						"solid-js",
-						"solid-js/web",
-						"solid-js/store",
-						...this.extraExternals,
-					],
-				}).then(build =>
-					build.write({
-						dir: path.join(outdir, this.clientDir),
-						format: "esm",
-						exports: "named",
-					})
-				)
-			)
-		)
-	}
+/**
+ * @param {string} input the input path
+ * @param {{hydrate?: boolean}} options
+ */
+async function buildServer(input, options) {
+	return rollup(
+		createRollupConfig({
+			input,
+			exportConditions: ["solid", "node", "import", "module", "default"],
+			generate: "ssr",
+			hydratable: !!options.hydrate,
+			external: ["solid-js", "solid-js/web", "solid-js/store"],
+		})
+	).then(build =>
+		build.generate({
+			format: "cjs",
+			exports: "named",
+		})
+	)
+}
 
-	/**
-	 *
-	 * @param {string} inputPath
-	 * @returns
-	 */
-	getComponent(inputPath) {
-		if (!this.components[inputPath]) {
-			throw new Error(
-				`"${inputPath}" doesn't seem to have been compiled by the solid plugin idk why im so sorry`
-			)
-		}
-		return this.components[inputPath]
+/**
+ * @param {{
+ *  inputPath: string
+ *  hydrate?: boolean
+ *  external?: string[]
+ *  outdir: string
+ * }} options
+ * @param {EleventySolidContext} context
+ */
+async function buildClient(options, context) {
+	return rollup(
+		createRollupConfig({
+			input: options.inputPath,
+			exportConditions: ["solid", "browser", "import", "default"],
+			generate: "dom",
+			hydratable: !!options.hydrate,
+			external: [
+				"solid-js",
+				"solid-js/web",
+				"solid-js/store",
+				...(options.external || []),
+			],
+		})
+	).then(build =>
+		build.write({
+			dir: path.join(options.outdir, this.clientDir),
+			format: "esm",
+			exports: "named",
+		})
+	)
+}
+
+
+/**
+ *
+ * @param {{
+ *  input: string
+ *  exportConditions: string[]
+ *  external?: string[]
+ *  babel?: RollupBabelInputPluginOptions
+ *  generate: string
+ *  hydratable?: boolean
+ *  targets?: string
+ * }} options
+ * @returns {import("rollup").RollupOptions}
+ */
+function createRollupConfig(options) {
+	const {
+		input,
+		exportConditions,
+		external,
+		generate,
+		hydratable = false,
+		targets = "last 1 year"
+	} = options
+	return {
+		input,
+		plugins: [
+			resolve({
+				exportConditions,
+				extensions: rollupExtensions,
+			}),
+			babel({				
+				presets: [				
+					typescript,
+					[env, {bugfixes: true, targets}],
+					["solid", {generate, hydratable}],
+				],
+				extensions: rollupExtensions,
+				babelHelpers: "bundled",
+			}),
+		],
+		external,
 	}
 }
 

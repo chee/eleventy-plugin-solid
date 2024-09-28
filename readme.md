@@ -27,9 +27,6 @@ export default eleventyConfig => {
 		// extra modules to treat as external in the client-side component bundle
 		external: []
 
-		// extra config options for rollup-plugin-babel
-		babel: {}
-
 		// if we should output solid's client side js to hydrate the component
 		// in the browser
 		// (experimental / unstable)
