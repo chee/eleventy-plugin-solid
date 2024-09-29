@@ -19,23 +19,29 @@ import solid from "eleventy-plugin-solid"
 
 export default eleventyConfig => {
 	eleventyConfig.addPlugin(solid, {
-		// default options shown
+		// all options are optional. defaults shown here.
 
 		// the file extensions the plugin should register
+		// i use ["11ty.tsx", "11ty.jsx", "11ty.ts"] here, personally
 		extensions: ["11ty.solid.tsx", "11ty.solid.jsx"],
 
-		// extra modules to treat as external in the client-side component bundle
-		external: []
-
 		// if we should output solid's client side js to hydrate the component
-		// in the browser
+		// in the browser. see instructions below
 		// (experimental / unstable)
 		hydrate: false
+
+		// extra modules to treat as external in client-side component bundles
+		// e.g. ["@solidjs/meta"]
+		// (solid-js, solid-js/web & solid-js/store are always excluded)
+		external: []
 
 		// the max time (in ms) to wait for suspense boundaries to resolve during
 		// SSR. you can set this to 0 to use the sync renderToString that resolves
 		// all its suspense boundaries on hydration
 		timeout: 30000
+
+		// the the name of the function that derives props from eleventy data.
+		derivePropsKey: "props"
 	})
 }
 ```
@@ -50,7 +56,6 @@ export const data = {
 // how to derive the component's props. may be an object, or a function
 // that returns an object. the function from is called with your eleventy
 // data during build. `this` is eleventy.config.javascriptFunctions
-// option: if you prefer you can call this `export function createProps`
 export function props(data) {
 	return {
 		title: data.title,
@@ -147,10 +152,8 @@ then your importmap might look like:
 - as the components are all rendered up front (so we can get the data export
   early), it's not possible to selectively decide if a specific template should
   be hydrated
-
-## bugs
-
-- during eleventy watch the data is outdated by 1 build. please fix this!
+- in order to account for a future where i can make these two things possible,
+  the `data` build is not cached.
 
 ## thanks
 
@@ -165,3 +168,4 @@ for showing me the light
 - [ ] return to mexico
 - [ ] eat tacos
 - [ ] use eleventy bundle for the client scripts when available
+- [ ] document the `solidAssets` shortcode!
