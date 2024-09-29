@@ -50,9 +50,11 @@ export const data = {
 // how to derive the component's props. may be an object, or a function
 // that returns an object. the function from is called with your eleventy
 // data during build. `this` is eleventy.config.javascriptFunctions
-// [aliased as createProps]
+// option: if you prefer you can call this `export function createProps`
 export function props(data) {
-	return {title: data.title}
+	return {
+		title: data.title,
+	}
 }
 
 import {createSignal} from "solid-js"
