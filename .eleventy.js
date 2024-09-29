@@ -13,10 +13,6 @@ import {generateHydrationScript} from "solid-js/web"
  * (defaults to `["11ty.solid.tsx", "11ty.solid.jsx"]`)
  * @prop {boolean} hydrate if we should output client side js to hydrate
  * (default `false`)
- * @prop {BabelOptions} babel extra options to pass to the babel rollup plugin
- * @prop {RollupOptions} rollup extra options to pass to rollup
- * @prop {string[]} external extra modules to treat as external in the
- * client-side bundle
  * @prop {number} timeout the max time (in ms) to wait for suspense boundaries
  * to resolve during SSR. Set to 0 to use sync renderToString (default `30000`)
  * @prop {string} derivePropsKey the name of the exported function that derives
@@ -33,9 +29,6 @@ export default (eleventy, opts = {}) => {
 		{
 			extensions: ["11ty.solid.tsx", "11ty.solid.jsx"],
 			hydrate: false,
-			babel: {},
-			rollup: {},
-			external: [],
 			timeout: 30000,
 			derivePropsKey: "props",
 		},

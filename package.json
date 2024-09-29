@@ -18,14 +18,10 @@
   "author": "chee",
   "license": "MIT",
   "dependencies": {
+    "@babel/core": "^7.25.2",
     "@babel/preset-env": "^7.25.4",
     "@babel/preset-typescript": "^7.24.7",
-    "@rollup/plugin-babel": "^6.0.4",
-    "@rollup/plugin-node-resolve": "^15.3.0",
-    "babel-preset-solid": "^1.8.22",
-    "dedent": "^1.5.3",
-    "globby": "^14.0.2",
-    "rollup": "^4.22.4"
+    "babel-preset-solid": "^1.8.22"
   },
   "repository": {
     "type": "git",

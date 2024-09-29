@@ -1,15 +1,14 @@
-import {nodeResolve as resolve} from "@rollup/plugin-node-resolve"
-import {babel} from "@rollup/plugin-babel"
 import path from "node:path"
 import {createRequire, Module} from "node:module"
-import {rollup} from "rollup"
+import {transformAsync} from "@babel/core"
+import {readFile, writeFile} from "node:fs/promises"
+import solid from "babel-preset-solid"
 import typescript from "@babel/preset-typescript"
 import env from "@babel/preset-env"
+import vm from "node:vm"
 
 /**
  * @import {EleventySolidPluginGlobalOptions} from "./.eleventy.js"
- * @import {RollupOptions} from "rollup"
- * @import {RollupBabelInputPluginOptions} from "@rollup/plugin-babel"
  */
 
 /**
@@ -71,21 +70,19 @@ export async function build(options) {
 	if (!options.force && options.context.cache.has(cachepoint)) {
 		return /** @type {ComponentSpec} */ (options.context.cache.get(cachepoint))
 	}
-
 	/**
-	 * @type {Promise<import("rollup").RollupOutput>[]}
+	 * @type {Promise<string>[]}
 	 */
 	const builds = [buildServer(options)]
 	if (options.context.hydrate) {
 		builds.push(buildClient(options))
 	}
 	const [server] = await Promise.all(builds)
-	const [chunk] = server.output
 	const module = /** @type {EleventySolidComponentModule} */ (
 		requireFromString(
 			// so i have access to the sharedConfig.context when rendering
-			chunk.code + `module.exports.solid = require("solid-js/web")`,
-			chunk.facadeModuleId
+			server + `\n;module.exports.solid = require("solid-js/web")`,
+			options.inputPath
 		)
 	)
 
@@ -98,7 +95,11 @@ export async function build(options) {
 		solid: module.solid,
 		server: module.default,
 		client: options.context.hydrate
-			? path.join(options.outdir, options.context.clientDir, chunk.fileName)
+			? path.join(
+					options.outdir,
+					options.context.clientDir,
+					options.inputPath.replace(/[tj]sx$/, "tsx")
+				)
 			: undefined,
 		data: module.data || {},
 		props: module[options.context.derivePropsKey],
@@ -119,12 +120,9 @@ export async function build(options) {
  * you can use solid for layouts, and selectively hydrate templates.
  */
 export async function getData(options) {
-	const [chunk] = (await buildServer(options)).output
+	const output = await buildServer(options)
 	return /** @type {EleventySolidComponentModule} */ (
-		requireFromString(
-			/* [norm macdonald voice] i'm an old */ chunk.code,
-			chunk.facadeModuleId
-		)
+		requireFromString(output, options.inputPath)
 	)?.data
 }
 
@@ -132,101 +130,41 @@ export async function getData(options) {
  * @param {Omit<EleventySolidBuildOptions, "outdir">} options
  */
 export async function buildServer(options) {
-	return rollup(
-		createRollupConfig({
-			input: options.inputPath,
-			exportConditions: ["solid", "node", "import", "module", "default"],
-			generate: "ssr",
-			hydratable: !!options.context.hydrate,
-			external: ["solid-js", "solid-js/web", "solid-js/store"],
-			babel: options.context.babel,
-			rollup: options.context.rollup,
-		})
-	).then(build =>
-		build.generate({
-			format: "cjs",
-			exports: "named",
-		})
-	)
+	const source = await readFile(options.inputPath, "utf-8")
+	const filename = path.basename(options.inputPath)
+	return await transformAsync(source, {
+		presets: [
+			[typescript],
+			[solid, {generate: "ssr", hydratable: options.context.hydrate}],
+			[env, {modules: "commonjs"}],
+		],
+		filename,
+		sourceMaps: "inline",
+	}).then(result => result?.code ?? "")
 }
 
 /**
  * @param {EleventySolidBuildOptions} options
  */
 async function buildClient(options) {
-	return rollup(
-		createRollupConfig({
-			input: options.inputPath,
-			exportConditions: ["solid", "browser", "import", "default"],
-			generate: "dom",
-			hydratable: !!options.context.hydrate,
-			external: [
-				"solid-js",
-				"solid-js/web",
-				"solid-js/store",
-				...(options.context.external || []),
-			],
-			babel: options.context.babel,
-			rollup: options.context.rollup,
-		})
-	).then(build =>
-		build.write({
-			dir: path.join(options.outdir, options.context.clientDir),
-			format: "esm",
-			exports: "named",
-		})
-	)
-}
-
-/**
- * @param {{
- *  input: string
- *  exportConditions: string[]
- *  generate: string
- *  external?: string[]
- *  rollup?: RollupOptions
- *  babel?: RollupBabelInputPluginOptions
- *  hydratable?: boolean
- *  targets?: string
- * }} options
- * @returns {import("rollup").RollupOptions}
- */
-function createRollupConfig(options) {
-	const {
-		input,
-		exportConditions,
-		external,
-		generate,
-		hydratable = false,
-		targets = "last 1 year",
-	} = options
-	return {
-		...options.rollup,
-		input,
-		plugins: [
-			...(Array.isArray(options.rollup?.plugins)
-				? options.rollup.plugins
-				: options.rollup?.plugins
-					? [options.rollup?.plugins]
-					: []),
-			resolve({
-				exportConditions,
-				extensions: rollupExtensions,
-			}),
-			babel({
-				...options.babel,
-				presets: [
-					...(options.babel?.presets ?? []),
-					typescript,
-					[env, {bugfixes: true, targets}],
-					["solid", {generate, hydratable}],
-				],
-				extensions: options.babel?.extensions || rollupExtensions,
-				babelHelpers: "bundled",
-			}),
+	const source = await readFile(options.inputPath, "utf-8")
+	const filename = path.basename(options.inputPath)
+	const {name} = path.parse(options.inputPath)
+	return await transformAsync(source, {
+		presets: [
+			[typescript],
+			[solid, {generate: "dom", hydratable: options.context.hydrate}],
+			[env, {modules: false}],
 		],
-		external,
-	}
+		filename,
+		sourceMaps: "inline",
+	}).then(async result => {
+		await writeFile(
+			path.join(options.outdir, options.context.clientDir, name + ".js"),
+			result?.code ?? ""
+		)
+		return result?.code ?? ""
+	})
 }
 
 /**
@@ -242,8 +180,6 @@ function requireFromString(src, filename) {
 	module._compile(src, filename)
 	return module.exports
 }
-
-const rollupExtensions = ["js", "jsx", "ts", "tsx"]
 
 function createIdGenerator(
 	alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

@@ -30,11 +30,6 @@ export default eleventyConfig => {
 		// (experimental / unstable)
 		hydrate: false
 
-		// extra modules to treat as external in client-side component bundles
-		// e.g. ["@solidjs/meta"]
-		// (solid-js, solid-js/web & solid-js/store are always excluded)
-		external: []
-
 		// the max time (in ms) to wait for suspense boundaries to resolve during
 		// SSR. you can set this to 0 to use the sync renderToString that resolves
 		// all its suspense boundaries on hydration
