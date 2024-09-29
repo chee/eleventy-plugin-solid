@@ -1,30 +1,26 @@
-import createEleventySolidContext from "./eleventy-solid.js"
+import * as eleventySolid from "./eleventy-solid.js"
 import path from "node:path"
 import {generateHydrationScript} from "solid-js/web"
 
 /**
  * @import {RollupBabelInputPluginOptions as BabelOptions} from "@rollup/plugin-babel"
+ * @import {RollupOptions} from "rollup"
  */
 
 /**
  * @typedef {Object} EleventySolidPluginGlobalOptions
- * @prop {string[]} extensions extensions the template should treat as
- *                             solid-js (defaults to `["11ty.solid.tsx",
- *                             "11ty.solid.jsx"]`)
- * @prop {string[]} external extra modules to treat as external in the client-side bundle
+ * @prop {string[]} extensions extensions the template should treat as solid-js
+ * (defaults to `["11ty.solid.tsx", "11ty.solid.jsx"]`)
  * @prop {boolean} hydrate if we should output client side js to hydrate
- *                         (default `false`)
- * @prop {number} timeout the max time (in ms) to wait for suspense
- *                        boundaries to resolve during SSR. Set to 0 to use
- *                        sync renderToString (default `30000`)
- *  @prop {BabelOptions} babel extra options to pass to the babel rollup plugin
- */
-
-/**
- * @typedef {EleventySolidPluginGlobalOptions & {
- * props?: any | ((any) => any)
- * on?: string
- * }} EleventySolidSettings
+ * (default `false`)
+ * @prop {BabelOptions} babel extra options to pass to the babel rollup plugin
+ * @prop {RollupOptions} rollup extra options to pass to rollup
+ * @prop {string[]} external extra modules to treat as external in the
+ * client-side bundle
+ * @prop {number} timeout the max time (in ms) to wait for suspense boundaries
+ * to resolve during SSR. Set to 0 to use sync renderToString (default `30000`)
+ * @prop {string} derivePropsKey the name of the exported function that derives
+ * props from eleventy data. (default `props`)
  */
 
 /**
@@ -37,14 +33,32 @@ export default (eleventy, opts = {}) => {
 		{
 			extensions: ["11ty.solid.tsx", "11ty.solid.jsx"],
 			hydrate: false,
-			timeout: 30000,
-			external: [],
 			babel: {},
+			rollup: {},
+			external: [],
+			timeout: 30000,
+			derivePropsKey: "props",
 		},
 		opts
 	)
 
-	const context = createEleventySolidContext()
+	const context = eleventySolid.createContext(globalOptions)
+	/** @type {Set<string>} */
+	const changes = new Set()
+
+	eleventy.on("beforeWatch", changedFiles => {
+		;(changedFiles || [])
+			.filter(
+				/**
+				 *
+				 * @param {string} filename
+				 */
+				filename => globalOptions.extensions.some(ext => filename.endsWith(ext))
+			)
+			.forEach(path => {
+				changes.add(path)
+			})
+	})
 
 	eleventy.addShortcode("solidHydrationScript", function (options = {}) {
 		/** @ts-expect-error outdated types */
@@ -58,35 +72,35 @@ export default (eleventy, opts = {}) => {
 	eleventy.addTemplateFormats(globalOptions.extensions)
 	eleventy.addExtension(globalOptions.extensions, {
 		read: false,
-		getData: true,
-		cache: false,
-		// async init() {
-		// 	// @ts-expect-error incorrect types for eleventy.dir
-		// 	await solid.build(eleventy.dir.output)
-		// },
 		/**
 		 *
 		 * @param {string} inputPath
 		 * @returns
 		 */
-		getInstanceFromInputPath(inputPath) {
-			return solid.getData(path.normalize(inputPath))
+		async getData(inputPath) {
+			return await eleventySolid.getData({
+				inputPath: path.normalize(inputPath),
+				context,
+			})
 		},
+		cache: false,
 		/**
 		 *
 		 * @param {string | ((any) => any)} str
 		 * @param {string} inputPath
 		 * @returns
 		 */
-		compile(str, inputPath) {
+		async compile(str, inputPath) {
 			return async data => {
-				console.log("am i recompiling?")
 				if (str) return typeof str === "function" ? str(data) : str
-				const componentSpec = await solid.build(
-					path.normalize(inputPath),
-					globalOptions,
-					eleventy.dir.output
-				)
+				const componentSpec = await eleventySolid.build({
+					inputPath: path.normalize(inputPath),
+					context,
+					// @ts-expect-error incorrect types in @11ty/eleventy.UserConfig
+					outdir: eleventy.dir.output,
+					force: changes.has(inputPath),
+				})
+				changes.delete(inputPath)
 
 				const thisContext = this.config.javascriptFunctions
 
@@ -102,6 +116,7 @@ export default (eleventy, opts = {}) => {
 					typeof timeoutMs == "number" && timeoutMs > 0
 						? componentSpec.solid.renderToStringAsync
 						: componentSpec.solid.renderToString
+
 				const html = await render(
 					() => componentSpec.server.bind(thisContext)(props),
 					timeoutMs ? {timeoutMs, renderId} : {renderId}

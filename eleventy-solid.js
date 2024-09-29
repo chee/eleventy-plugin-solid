@@ -7,6 +7,8 @@ import typescript from "@babel/preset-typescript"
 import env from "@babel/preset-env"
 
 /**
+ * @import {EleventySolidPluginGlobalOptions} from "./.eleventy.js"
+ * @import {RollupOptions} from "rollup"
  * @import {RollupBabelInputPluginOptions} from "@rollup/plugin-babel"
  */
 
@@ -30,40 +32,55 @@ import env from "@babel/preset-env"
  */
 
 /**
- * @typedef {Object} EleventySolidContext
- * @prop {Map<string, ComponentSpec>} cache
- * @prop {string} clientDir
- * @prop {() => string} getId
+ * @typedef {EleventySolidPluginGlobalOptions & {
+ *  cache: Map<string, ComponentSpec>
+ *  clientDir: string
+ *  getId: () => string
+ * }} EleventySolidContext
  */
 
 /**
  * @typedef {Object} EleventySolidBuildOptions
  * @prop {string} inputPath
- * @prop {EleventySolidContext} context
  * @prop {string} outdir
- * @prop {boolean} [hydrate=false]
+ * @prop {EleventySolidContext} context
  * @prop {boolean} [force=false]
  */
 
-export default function createEleventySolidContext() {
+/**
+ *
+ * @param {EleventySolidPluginGlobalOptions} options
+ * @returns {EleventySolidContext}
+ */
+export function createContext(options) {
 	const clientDir = "solid"
 	const getId = createIdGenerator()
-	return {cache: new Map(), clientDir, getId}
+	return {
+		cache: new Map(),
+		clientDir,
+		getId,
+		...options,
+	}
 }
 
 /**
  * @param {EleventySolidBuildOptions} options
  */
-async function build(options) {
+export async function build(options) {
 	const cachepoint = path.relative(".", options.inputPath)
-	if (!options.force && this.cache.has(cachepoint)) {
-		return /** @type {ComponentSpec} */ (this.cache.get(cachepoint))
+	if (!options.force && options.context.cache.has(cachepoint)) {
+		return /** @type {ComponentSpec} */ (options.context.cache.get(cachepoint))
 	}
 
-	const ssr = await this.server(options)
-	options.hydrate && (await this.client(options))
-
-	const [chunk] = ssr.output
+	/**
+	 * @type {Promise<import("rollup").RollupOutput>[]}
+	 */
+	const builds = [buildServer(options)]
+	if (options.context.hydrate) {
+		builds.push(buildClient(options))
+	}
+	const [server] = await Promise.all(builds)
+	const [chunk] = server.output
 	const module = /** @type {EleventySolidComponentModule} */ (
 		requireFromString(
 			// so i have access to the sharedConfig.context when rendering
@@ -72,57 +89,58 @@ async function build(options) {
 		)
 	)
 
-	const renderId = this.cache.has(cachepoint)
-		? /** @type {string} */ (this.cache.get(cachepoint)?.renderId)
-		: this.getId()
+	const renderId = options.context.cache.has(cachepoint)
+		? /** @type {string} */ (options.context.cache.get(cachepoint)?.renderId)
+		: options.context.getId()
 
 	/** @type {ComponentSpec} */
 	const result = {
 		solid: module.solid,
 		server: module.default,
-		client: options.hydrate
-			? path.join(outdir, this.clientDir, chunk.fileName)
+		client: options.context.hydrate
+			? path.join(options.outdir, options.context.clientDir, chunk.fileName)
 			: undefined,
 		data: module.data || {},
-		props: module.props || module.createProps
+		props: module[options.context.derivePropsKey],
 		renderId,
 	}
 
-	if (!("save" in options) || options.save) {
-		this.cache.set(cachepoint, result)
-	}
+	options.context.cache.set(cachepoint, result)
 
 	return result
 }
 
 /**
- * @param {string} input the input path
- * @param {{hydrate?: boolean}} options
+ * @param {Omit<EleventySolidBuildOptions, "outdir">} options
+ *
+ * this is unfortunate, and i don't much like it. it would be much preferable to
+ * use frontmatter for the data, but i can't see any way around building
+ * the file fresh just for the data if i want to work towards a world where
+ * you can use solid for layouts, and selectively hydrate templates.
  */
-async function importServer(input, options) {
-	const server = await buildServer(input, options)
-	const [chunk] = server.output
+export async function getData(options) {
+	const [chunk] = (await buildServer(options)).output
 	return /** @type {EleventySolidComponentModule} */ (
 		requireFromString(
-			// so i have access to the sharedConfig.context when rendering
-			chunk.code + `module.exports.solid = require("solid-js/web")`,
+			/* [norm macdonald voice] i'm an old */ chunk.code,
 			chunk.facadeModuleId
 		)
-	)
+	)?.data
 }
 
 /**
- * @param {string} input the input path
- * @param {{hydrate?: boolean}} options
+ * @param {Omit<EleventySolidBuildOptions, "outdir">} options
  */
-async function buildServer(input, options) {
+export async function buildServer(options) {
 	return rollup(
 		createRollupConfig({
-			input,
+			input: options.inputPath,
 			exportConditions: ["solid", "node", "import", "module", "default"],
 			generate: "ssr",
-			hydratable: !!options.hydrate,
+			hydratable: !!options.context.hydrate,
 			external: ["solid-js", "solid-js/web", "solid-js/store"],
+			babel: options.context.babel,
+			rollup: options.context.rollup,
 		})
 	).then(build =>
 		build.generate({
@@ -133,46 +151,41 @@ async function buildServer(input, options) {
 }
 
 /**
- * @param {{
- *  inputPath: string
- *  hydrate?: boolean
- *  external?: string[]
- *  outdir: string
- * }} options
- * @param {EleventySolidContext} context
+ * @param {EleventySolidBuildOptions} options
  */
-async function buildClient(options, context) {
+async function buildClient(options) {
 	return rollup(
 		createRollupConfig({
 			input: options.inputPath,
 			exportConditions: ["solid", "browser", "import", "default"],
 			generate: "dom",
-			hydratable: !!options.hydrate,
+			hydratable: !!options.context.hydrate,
 			external: [
 				"solid-js",
 				"solid-js/web",
 				"solid-js/store",
-				...(options.external || []),
+				...(options.context.external || []),
 			],
+			babel: options.context.babel,
+			rollup: options.context.rollup,
 		})
 	).then(build =>
 		build.write({
-			dir: path.join(options.outdir, this.clientDir),
+			dir: path.join(options.outdir, options.context.clientDir),
 			format: "esm",
 			exports: "named",
 		})
 	)
 }
 
-
 /**
- *
  * @param {{
  *  input: string
  *  exportConditions: string[]
- *  external?: string[]
- *  babel?: RollupBabelInputPluginOptions
  *  generate: string
+ *  external?: string[]
+ *  rollup?: RollupOptions
+ *  babel?: RollupBabelInputPluginOptions
  *  hydratable?: boolean
  *  targets?: string
  * }} options
@@ -185,22 +198,30 @@ function createRollupConfig(options) {
 		external,
 		generate,
 		hydratable = false,
-		targets = "last 1 year"
+		targets = "last 1 year",
 	} = options
 	return {
+		...options.rollup,
 		input,
 		plugins: [
+			...(Array.isArray(options.rollup?.plugins)
+				? options.rollup.plugins
+				: options.rollup?.plugins
+					? [options.rollup?.plugins]
+					: []),
 			resolve({
 				exportConditions,
 				extensions: rollupExtensions,
 			}),
-			babel({				
-				presets: [				
+			babel({
+				...options.babel,
+				presets: [
+					...(options.babel?.presets ?? []),
 					typescript,
 					[env, {bugfixes: true, targets}],
 					["solid", {generate, hydratable}],
 				],
-				extensions: rollupExtensions,
+				extensions: options.babel?.extensions || rollupExtensions,
 				babelHelpers: "bundled",
 			}),
 		],
