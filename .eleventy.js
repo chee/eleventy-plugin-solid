@@ -62,21 +62,27 @@ export default (eleventy, opts = {}) => {
 		return this.page?.solid?.assets?.join?.("") ?? ""
 	})
 
+	/**
+	 *
+	 * @param {string} inputPath
+	 */
+	async function build(inputPath) {
+		const spec = await eleventySolid.build({
+			inputPath: path.normalize(inputPath),
+			context,
+			// @ts-expect-error incorrect types in @11ty/eleventy.UserConfig
+			outdir: eleventy.dir.output,
+			force: changes.has(inputPath),
+		})
+		changes.delete(inputPath)
+		return spec
+	}
+
 	eleventy.addTemplateFormats(globalOptions.extensions)
 	eleventy.addExtension(globalOptions.extensions, {
 		read: false,
-		/**
-		 *
-		 * @param {string} inputPath
-		 * @returns
-		 */
-		async getData(inputPath) {
-			return await eleventySolid.getData({
-				inputPath: path.normalize(inputPath),
-				context,
-			})
-		},
-		cache: false,
+		getData: ["data"],
+		getInstanceFromInputPath: build,
 		/**
 		 *
 		 * @param {string | ((any) => any)} str
@@ -86,14 +92,7 @@ export default (eleventy, opts = {}) => {
 		async compile(str, inputPath) {
 			return async data => {
 				if (str) return typeof str === "function" ? str(data) : str
-				const componentSpec = await eleventySolid.build({
-					inputPath: path.normalize(inputPath),
-					context,
-					// @ts-expect-error incorrect types in @11ty/eleventy.UserConfig
-					outdir: eleventy.dir.output,
-					force: changes.has(inputPath),
-				})
-				changes.delete(inputPath)
+				const componentSpec = await build(inputPath)
 
 				const thisContext = this.config.javascriptFunctions
 
