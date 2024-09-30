@@ -9,7 +9,15 @@ components that are (optionally) hydrated.
 
 ## usage
 
-compatible with eleventy 3
+compatible with eleventy 3.
+
+⚠️ note! this exciting beta version requires --experimental-vm-modules
+
+run eleventy like this:
+
+```bash
+NODE_OPTIONS=--experimental-vm-modules eleventy
+```
 
 ### config
 

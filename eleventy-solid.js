@@ -1,11 +1,10 @@
 import path from "node:path"
-import {createRequire, Module} from "node:module"
 import {transformAsync} from "@babel/core"
 import {readFile, writeFile} from "node:fs/promises"
 import solid from "babel-preset-solid"
-import typescript from "@babel/preset-typescript"
 import env from "@babel/preset-env"
-import vm from "node:vm"
+import typescript from "@babel/preset-typescript"
+import {importFromString} from "module-from-string"
 
 /**
  * @import {EleventySolidPluginGlobalOptions} from "./.eleventy.js"
@@ -70,19 +69,20 @@ export async function build(options) {
 	if (!options.force && options.context.cache.has(cachepoint)) {
 		return /** @type {ComponentSpec} */ (options.context.cache.get(cachepoint))
 	}
+	const code = await readFile(options.inputPath, "utf-8")
 	/**
 	 * @type {Promise<string>[]}
 	 */
-	const builds = [buildServer(options)]
+	const builds = [buildServer(code, options)]
 	if (options.context.hydrate) {
-		builds.push(buildClient(options))
+		builds.push(buildClient(code, options))
 	}
-	const [server] = await Promise.all(builds)
+	const [ssr] = await Promise.all(builds)
 	const module = /** @type {EleventySolidComponentModule} */ (
-		requireFromString(
+		await importFromString(
 			// so i have access to the sharedConfig.context when rendering
-			server + `\n;module.exports.solid = require("solid-js/web")`,
-			options.inputPath
+			ssr + "\nexport * as solid from 'solid-js/web'",
+			{filename: options.inputPath, useCurrentGlobal: true}
 		)
 	)
 
@@ -112,52 +112,37 @@ export async function build(options) {
 }
 
 /**
- * @param {Omit<EleventySolidBuildOptions, "outdir">} options
- *
- * this is unfortunate, and i don't much like it. it would be much preferable to
- * use frontmatter for the data, but i can't see any way around building
- * the file fresh just for the data if i want to work towards a world where
- * you can use solid for layouts, and selectively hydrate templates.
- */
-export async function getData(options) {
-	const output = await buildServer(options)
-	return /** @type {EleventySolidComponentModule} */ (
-		requireFromString(output, options.inputPath)
-	)?.data
-}
-
-/**
+ * @param {string} code
  * @param {Omit<EleventySolidBuildOptions, "outdir">} options
  */
-export async function buildServer(options) {
-	const source = await readFile(options.inputPath, "utf-8")
+export async function buildServer(code, options) {
 	const filename = path.basename(options.inputPath)
-	return await transformAsync(source, {
+	return await transformAsync(code, {
+		compact: true,
 		presets: [
 			[typescript],
+			[env, {bugfixes: true, modules: false, targets: "last 1 years"}],
 			[solid, {generate: "ssr", hydratable: options.context.hydrate}],
-			[env, {modules: "commonjs"}],
 		],
 		filename,
-		sourceMaps: "inline",
 	}).then(result => result?.code ?? "")
 }
 
 /**
+ * @param {string} code
  * @param {EleventySolidBuildOptions} options
  */
-async function buildClient(options) {
-	const source = await readFile(options.inputPath, "utf-8")
+async function buildClient(code, options) {
 	const filename = path.basename(options.inputPath)
 	const {name} = path.parse(options.inputPath)
-	return await transformAsync(source, {
+	return await transformAsync(code, {
+		compact: true,
 		presets: [
 			[typescript],
+			[env, {bugfixes: true, modules: false, targets: "last 1 years"}],
 			[solid, {generate: "dom", hydratable: options.context.hydrate}],
-			[env, {modules: false}],
 		],
 		filename,
-		sourceMaps: "inline",
 	}).then(async result => {
 		await writeFile(
 			path.join(options.outdir, options.context.clientDir, name + ".js"),
@@ -165,20 +150,6 @@ async function buildClient(options) {
 		)
 		return result?.code ?? ""
 	})
-}
-
-/**
- *
- * @param {string} src
- * @param {string} filename
- */
-const require = createRequire(import.meta.url)
-function requireFromString(src, filename) {
-	const module = new Module(filename)
-	module.require = require
-	// @ts-expect-error
-	module._compile(src, filename)
-	return module.exports
 }
 
 function createIdGenerator(
