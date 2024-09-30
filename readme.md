@@ -33,6 +33,7 @@ export default eleventyConfig => {
 		// extra modules to treat as external in client-side component bundles
 		// e.g. ["@solidjs/meta"]
 		// (solid-js, solid-js/web & solid-js/store are always excluded)
+		// (deprecated, in a later version all modules will be external)
 		external: []
 
 		// the max time (in ms) to wait for suspense boundaries to resolve during
